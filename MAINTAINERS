@@ -9304,6 +9304,11 @@ F:	include/linux/dt-bindings/mux/
 F:	include/linux/mux/
 F:	drivers/mux/
 
+MULTIPLEXER SUBSYSTEM INTEL CHT USB MUX DRIVER
+M:	Hans de Goede <hdegoede@redhat.com>
+S:	Maintained
+F:	drivers/mux/intel-cht-usb-mux.c
+
 MULTITECH MULTIPORT CARD (ISICOM)
 S:	Orphan
 F:	drivers/tty/isicom.c
