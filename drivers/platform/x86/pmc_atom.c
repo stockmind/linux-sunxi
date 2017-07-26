@@ -24,6 +24,15 @@
 #include <linux/platform_device.h>
 #include <linux/pci.h>
 #include <linux/seq_file.h>
+#include <asm/intel_idle.h>
+
+#define PMC_CLK_CTL_OFFSET		0x60
+#define PMC_CLK_NUM			6
+#define PMC_CLK_CTL_GATED_ON_D3		0x0
+#define PMC_CLK_CTL_FORCE_ON		0x1
+#define PMC_CLK_CTL_FORCE_OFF		0x2
+#define PMC_CLK_CTL_RESERVED		0x3
+#define PMC_MASK_CLK_CTL		GENMASK(1, 0)
 
 struct pmc_bit_map {
 	const char *name;
@@ -417,6 +426,81 @@ static int pmc_setup_clks(struct pci_dev *pdev, void __iomem *pmc_regmap,
 	return 0;
 }
 
+#if defined(CONFIG_PM_DEBUG) && defined(CONFIG_INTEL_IDLE)
+struct pmc_notifier_block {
+	struct notifier_block nb;
+	struct pmc_dev *pmc;
+};
+
+static void pmc_dev_state_check(int cpu, u32 sts, const struct pmc_bit_map *sts_map,
+				u32 fd, const struct pmc_bit_map *fd_map)
+{
+	int index;
+
+	for (index = 0; sts_map[index].name; index++) {
+		if (!(fd_map[index].bit_mask & fd) &&
+		    !(sts_map[index].bit_mask & sts)) {
+			pr_err("pmc debug: cpu %d: %s is in D0 prior to freeze\n",
+			       cpu, sts_map[index].name);
+		}
+	}
+}
+
+static int pmc_freeze_cb(struct notifier_block *nb,
+			 unsigned long action, void *data)
+{
+	struct pmc_notifier_block *pmc_nb =
+		container_of(nb, struct pmc_notifier_block, nb);
+	struct pmc_dev *pmc = pmc_nb->pmc;
+	const struct pmc_reg_map *m = pmc->map;
+	u32 func_dis, func_dis_2;
+	u32 d3_sts_0, d3_sts_1;
+	int cpu = action;
+	int i;
+
+	func_dis = pmc_reg_read(pmc, PMC_FUNC_DIS);
+	func_dis_2 = pmc_reg_read(pmc, PMC_FUNC_DIS_2);
+	d3_sts_0 = pmc_reg_read(pmc, PMC_D3_STS_0);
+	d3_sts_1 = pmc_reg_read(pmc, PMC_D3_STS_1);
+
+	/* Avoid false positives, add fused off bits + PMIC I2C to func_dis */
+	if (m->d3_sts_1	== byt_d3_sts_1_map) {
+		/* BYT */
+		func_dis |= BIT_GBE | BIT_LPSS2_F5_I2C5;
+		func_dis_2 |= BIT_SMB;
+	} else {
+		/* CHT */
+		func_dis |= BIT_GBE | BIT_LPSS2_F7_I2C7;
+		func_dis_2 |= BIT_SMB | BIT_FD_ISH;
+	}
+
+	/* Low part */
+	pmc_dev_state_check(cpu, d3_sts_0, m->d3_sts_0, func_dis, m->func_dis);
+
+	/* High part */
+	pmc_dev_state_check(cpu, d3_sts_1, m->d3_sts_1, func_dis_2, m->func_dis_2);
+
+	/* Check PMC clocks */
+	for (i = 0; i < PMC_CLK_NUM; i++) {
+		u32 ctl = pmc_reg_read(pmc, PMC_CLK_CTL_OFFSET + 4 * i);
+
+		if ((ctl & PMC_MASK_CLK_CTL) != PMC_CLK_CTL_FORCE_ON)
+			continue;
+
+		pr_err("pmc debug: cpu %d: clk %d is ON prior to freeze (ctl %08x)\n",
+		       cpu, i, ctl);
+	}
+
+	return 0;
+}
+
+static struct pmc_notifier_block pmc_freeze_nb = {
+	.nb = {
+		.notifier_call = pmc_freeze_cb,
+	},
+};
+#endif
+
 static int pmc_setup_dev(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	struct pmc_dev *pmc = &pmc_device;
@@ -455,6 +539,11 @@ static int pmc_setup_dev(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (ret)
 		dev_warn(&pdev->dev, "platform clocks register failed: %d\n",
 			 ret);
+
+#if defined(CONFIG_PM_DEBUG) && defined(CONFIG_INTEL_IDLE)
+	pmc_freeze_nb.pmc = pmc;
+	intel_idle_freeze_notifier_register(&pmc_freeze_nb.nb);
+#endif
 
 	pmc->init = true;
 	return ret;
