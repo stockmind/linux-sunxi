@@ -109,7 +109,8 @@ static int silead_ts_request_input_dev(struct silead_ts_data *data)
 			    INPUT_MT_DIRECT | INPUT_MT_DROP_UNUSED |
 			    INPUT_MT_TRACK);
 
-	input_set_capability(data->input, EV_KEY, KEY_LEFTMETA);
+	if (device_property_read_bool(dev, "silead,home-button"))
+		input_set_capability(data->input, EV_KEY, KEY_LEFTMETA);
 
 	data->input->name = SILEAD_TS_NAME;
 	data->input->phys = "input/ts";
