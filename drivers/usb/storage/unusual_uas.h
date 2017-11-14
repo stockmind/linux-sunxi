@@ -101,6 +101,13 @@ UNUSUAL_DEV(0x0bc2, 0xab21, 0x0000, 0x9999,
 		USB_SC_DEVICE, USB_PR_DEVICE, NULL,
 		US_FL_NO_ATA_1X),
 
+/* Reported-by: Wido <wido.gg@gmail.com> */
+UNUSUAL_DEV(0x0bc2, 0xab24, 0x0000, 0x9999,
+		"Seagate",
+		"BUP Slim BK",
+		USB_SC_DEVICE, USB_PR_DEVICE, NULL,
+		US_FL_NO_ATA_1X),
+
 /* Reported-by: G. Richard Bellamy <rbellamy@pteradigm.com> */
 UNUSUAL_DEV(0x0bc2, 0xab2a, 0x0000, 0x9999,
 		"Seagate",
