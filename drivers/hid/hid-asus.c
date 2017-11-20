@@ -65,9 +65,10 @@ MODULE_DESCRIPTION("Asus HID Keyboard and TouchPad");
 #define QUIRK_IS_MULTITOUCH		BIT(3)
 #define QUIRK_NO_CONSUMER_USAGES	BIT(4)
 #define QUIRK_USE_KBD_BACKLIGHT		BIT(5)
-#define QUIRK_T100_KEYBOARD		BIT(6)
-#define QUIRK_T100CHI			BIT(7)
-#define QUIRK_G752_KEYBOARD		BIT(8)
+#define QUIRK_T100TA_KEYBOARD		BIT(6)
+#define QUIRK_T100HA_KEYBOARD		BIT(7)
+#define QUIRK_T100CHI			BIT(8)
+#define QUIRK_G752_KEYBOARD		BIT(9)
 
 #define I2C_KEYBOARD_QUIRKS			(QUIRK_FIX_NOTEBOOK_REPORT | \
 						 QUIRK_NO_INIT_REPORTS | \
@@ -115,6 +116,15 @@ static const struct asus_touchpad_info asus_t100ta_tp = {
 	.max_y = 1120,
 	.res_x = 30, /* units/mm */
 	.res_y = 27, /* units/mm */
+	.contact_size = 5,
+	.max_contacts = 5,
+};
+
+static const struct asus_touchpad_info asus_t100ha_tp = {
+	.max_x = 2640,
+	.max_y = 1320,
+	.res_x = 30, /* units/mm */
+	.res_y = 29, /* units/mm */
 	.contact_size = 5,
 	.max_contacts = 5,
 };
@@ -601,12 +611,15 @@ static int asus_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	if (drvdata->quirks & QUIRK_IS_MULTITOUCH)
 		drvdata->tp = &asus_i2c_tp;
 
-	if (drvdata->quirks & QUIRK_T100_KEYBOARD) {
+	if (drvdata->quirks & (QUIRK_T100TA_KEYBOARD | QUIRK_T100HA_KEYBOARD)) {
 		struct usb_interface *intf = to_usb_interface(hdev->dev.parent);
 
 		if (intf->altsetting->desc.bInterfaceNumber == T100_TPAD_INTF) {
-			drvdata->quirks = QUIRK_SKIP_INPUT_MAPPING;
-			drvdata->tp = &asus_t100ta_tp;
+			drvdata->quirks |= QUIRK_SKIP_INPUT_MAPPING;
+			if (drvdata->quirks & QUIRK_T100HA_KEYBOARD)
+				drvdata->tp = &asus_t100ha_tp;
+			else
+				drvdata->tp = &asus_t100ta_tp;
 		}
 	}
 
@@ -687,7 +700,7 @@ static __u8 *asus_report_fixup(struct hid_device *hdev, __u8 *rdesc,
 		rdesc[55] = 0xdd;
 	}
 	/* For the T100TA keyboard dock */
-	if (drvdata->quirks & QUIRK_T100_KEYBOARD &&
+	if (drvdata->quirks & QUIRK_T100TA_KEYBOARD &&
 		 *rsize == 76 && rdesc[73] == 0x81 && rdesc[74] == 0x01) {
 		hid_info(hdev, "Fixing up Asus T100 keyb report descriptor\n");
 		rdesc[74] &= ~HID_MAIN_ITEM_CONSTANT;
@@ -751,8 +764,11 @@ static const struct hid_device_id asus_devices[] = {
 	{ HID_USB_DEVICE(USB_VENDOR_ID_ASUSTEK,
 		USB_DEVICE_ID_ASUSTEK_ROG_KEYBOARD3), QUIRK_G752_KEYBOARD },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_ASUSTEK,
-		USB_DEVICE_ID_ASUSTEK_T100_KEYBOARD),
-	  QUIRK_T100_KEYBOARD | QUIRK_NO_CONSUMER_USAGES },
+		USB_DEVICE_ID_ASUSTEK_T100TA_KEYBOARD),
+	  QUIRK_T100TA_KEYBOARD | QUIRK_NO_CONSUMER_USAGES },
+	{ HID_USB_DEVICE(USB_VENDOR_ID_ASUSTEK,
+		USB_DEVICE_ID_ASUSTEK_T100HA_KEYBOARD),
+	  QUIRK_T100HA_KEYBOARD | QUIRK_NO_CONSUMER_USAGES },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_CHICONY, USB_DEVICE_ID_ASUS_AK1D) },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_TURBOX, USB_DEVICE_ID_ASUS_MD_5110) },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_JESS, USB_DEVICE_ID_ASUS_MD_5112) },
