@@ -562,8 +562,7 @@ static int amdgpu_cs_parser_bos(struct amdgpu_cs_parser *p,
 				 * invalidated it. Free it and try again
 				 */
 				release_pages(e->user_pages,
-					      bo->tbo.ttm->num_pages,
-					      false);
+					      bo->tbo.ttm->num_pages);
 				kvfree(e->user_pages);
 				e->user_pages = NULL;
 			}
@@ -694,8 +693,7 @@ error_free_pages:
 				continue;
 
 			release_pages(e->user_pages,
-				      e->robj->tbo.ttm->num_pages,
-				      false);
+				      e->robj->tbo.ttm->num_pages);
 			kvfree(e->user_pages);
 		}
 	}
@@ -1497,8 +1495,11 @@ out:
 	memset(wait, 0, sizeof(*wait));
 	wait->out.status = (r > 0);
 	wait->out.first_signaled = first;
-	/* set return value 0 to indicate success */
-	r = array[first]->error;
+
+	if (first < fence_count && array[first])
+		r = array[first]->error;
+	else
+		r = 0;
 
 err_free_fence_array:
 	for (i = 0; i < fence_count; i++)
