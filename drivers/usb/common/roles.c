@@ -70,19 +70,22 @@ static void *usb_role_switch_match(struct devcon *con, int ep, void *data)
 	dev = class_find_device(role_class, NULL, con->endpoint[ep],
 				__switch_match);
 
-	return dev ? to_role_switch(dev) : NULL;
+	return dev ? to_role_switch(dev) : ERR_PTR(-EPROBE_DEFER);
 }
 
 /**
  * usb_role_switch_get - Find USB role switch linked with the caller
  * @dev: The caller device
  *
- * Finds and returns role switch linked with @dev. The reference count for the
- * found switch is incremented.
+ * Finds and returns role switch linked with @dev. Returns a reference to the
+ * USB role switch on success, ERR_PTR(-ENODEV) if no matching connection was
+ * found, or ERR_PTR(-EPROBE_DEFER) when a connection was found but the switch
+ * has not been enumerated yet.
  */
 struct usb_role_switch *usb_role_switch_get(struct device *dev)
 {
-	return __device_find_connection(dev, NULL, NULL, usb_role_switch_match);
+	return __device_find_connection(dev, "usb-role-switch", NULL,
+					usb_role_switch_match);
 }
 EXPORT_SYMBOL_GPL(usb_role_switch_get);
 
