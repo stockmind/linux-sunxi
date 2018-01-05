@@ -22,6 +22,8 @@ static LIST_HEAD(devcon_list);
  * Find a connection with unique identifier @con_id between @dev and an other
  * device. @match will be used to convert the connection description to data the
  * caller is expecting to be returned.
+ * Returns The @match return value on a match, ERR_PTR(-EINVAL) on invalid
+ * arguments or ERR_PTR(-ENODEV) if no matching connection was found.
  */
 void *__device_find_connection(struct device *dev, const char *con_id,
 			       void *data,
@@ -34,7 +36,7 @@ void *__device_find_connection(struct device *dev, const char *con_id,
 	int ep;
 
 	if (!match)
-		return NULL;
+		return ERR_PTR(-EINVAL);
 
 	rcu_read_lock();
 
@@ -53,7 +55,7 @@ void *__device_find_connection(struct device *dev, const char *con_id,
 
 	rcu_read_unlock();
 
-	return ret;
+	return ret ? ret : ERR_PTR(-ENODEV);
 }
 EXPORT_SYMBOL_GPL(__device_find_connection);
 
@@ -88,7 +90,11 @@ static void *generic_match(struct devcon *con, int ep, void *data)
 			return dev;
 	}
 
-	return NULL;
+	/*
+	 * We only get called if a connection was found, tell the caller to
+	 * wait for the other device to show-up.
+	 */
+	return ERR_PTR(-EPROBE_DEFER);
 }
 
 /**
@@ -97,8 +103,11 @@ static void *generic_match(struct devcon *con, int ep, void *data)
  * @con_id: Identifier for the connection
  *
  * Find a connection with unique identifier @con_id between @dev and an
- * other device. Returns handle to the device that is connected to @dev or
- * NULL. The reference count for the found device is incremented.
+ * other device. On success returns handle to the device that is connected
+ * to @dev, with the reference count for the found device incremented.
+ * Returns ERR_PTR(-ENODEV) if no matching connection was found, or
+ * ERR_PTR(-EPROBE_DEFER) when a connection was found but the other device
+ * has not been enumerated yet.
  */
 struct device *device_find_connection(struct device *dev, const char *con_id)
 {
