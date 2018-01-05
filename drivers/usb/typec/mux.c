@@ -23,23 +23,30 @@ static void *typec_switch_match(struct devcon *con, int ep, void *data)
 		if (!strcmp(con->endpoint[ep], dev_name(sw->dev)))
 			return sw;
 
-	return NULL;
+	/*
+	 * We only get called if a connection was found, tell the caller to
+	 * wait for the switch to show-up.
+	 */
+	return ERR_PTR(-EPROBE_DEFER);
 }
 
 /**
  * typec_switch_get - Find USB Type-C orientation switch
  * @dev: The caller device
  *
- * Finds a switch linked with @dev. If a switch is found, the reference count
- * for it is incremented.
+ * Finds a switch linked with @dev. Returns a reference to the switch on
+ * success, ERR_PTR(-ENODEV) if no matching connection was found, or
+ * ERR_PTR(-EPROBE_DEFER) when a connection was found but the switch
+ * has not been enumerated yet.
  */
 struct typec_switch *typec_switch_get(struct device *dev)
 {
 	struct typec_switch *sw;
 
 	mutex_lock(&switch_lock);
-	sw = __device_find_connection(dev, NULL, NULL, typec_switch_match);
-	if (sw)
+	sw = __device_find_connection(dev, "typec-switch", NULL,
+				      typec_switch_match);
+	if (!IS_ERR(sw))
 		get_device(sw->dev);
 	mutex_unlock(&switch_lock);
 
@@ -103,7 +110,11 @@ static void *typec_mux_match(struct devcon *con, int ep, void *data)
 		if (!strcmp(con->endpoint[ep], dev_name(mux->dev)))
 			return mux;
 
-	return NULL;
+	/*
+	 * We only get called if a connection was found, tell the caller to
+	 * wait for the mux to show-up.
+	 */
+	return ERR_PTR(-EPROBE_DEFER);
 }
 
 /**
@@ -111,15 +122,17 @@ static void *typec_mux_match(struct devcon *con, int ep, void *data)
  * @dev: The caller device
  *
  * Finds a mux linked to the caller. This function is primarily meant for the
- * Type-C drivers. If a mux is found, the reference count for it is incremented.
+ * Type-C drivers. Returns a reference to the mux on success, ERR_PTR(-ENODEV)
+ * if no matching connection was found, or ERR_PTR(-EPROBE_DEFER) when a
+ * connection was found but the mux has not been enumerated yet.
  */
 struct typec_mux *typec_mux_get(struct device *dev)
 {
 	struct typec_mux *mux;
 
 	mutex_lock(&mux_lock);
-	mux = __device_find_connection(dev, NULL, NULL, typec_mux_match);
-	if (mux)
+	mux = __device_find_connection(dev, "typec-mux", NULL, typec_mux_match);
+	if (!IS_ERR(mux))
 		get_device(mux->dev);
 	mutex_unlock(&mux_lock);
 
