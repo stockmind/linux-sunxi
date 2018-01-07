@@ -34,6 +34,7 @@ struct usb_role_switch_desc {
 };
 
 int usb_role_switch_set(struct usb_role_switch *sw, enum usb_role role);
+void usb_role_switch_disallow_userspace_control(struct usb_role_switch *sw);
 struct usb_role_switch *usb_role_switch_get(struct device *dev);
 void usb_role_switch_put(struct usb_role_switch *sw);
 

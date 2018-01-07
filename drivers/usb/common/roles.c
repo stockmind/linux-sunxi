@@ -18,6 +18,7 @@ static struct class *role_class;
 struct usb_role_switch {
 	struct device dev;
 	struct mutex lock; /* device lock*/
+	bool allow_userspace_control;
 	enum usb_role role;
 
 	/* From descriptor */
@@ -102,10 +103,13 @@ EXPORT_SYMBOL_GPL(usb_role_switch_put);
 static umode_t
 usb_role_switch_is_visible(struct kobject *kobj, struct attribute *attr, int n)
 {
-	/*
-	 * FIXME: With USB Type-C ports, user space control can not be allowed.
-	 */
-	return attr->mode;
+	struct device *dev = container_of(kobj, typeof(*dev), kobj);
+	struct usb_role_switch *sw = to_role_switch(dev);
+
+	if (sw->allow_userspace_control)
+		return 0644;
+	else
+		return 0444;
 }
 
 static const char * const usb_roles[] = {
@@ -197,6 +201,17 @@ static const struct device_type usb_role_dev_type = {
 };
 
 /**
+ * usb_role_switch_disallow_userspace_control - Disallow userspace control
+ * @sw: USB role switch for which to disallow userspace control
+ */
+void usb_role_switch_disallow_userspace_control(struct usb_role_switch *sw)
+{
+	sw->allow_userspace_control = false;
+	sysfs_update_group(&sw->dev.kobj, &usb_role_switch_group);
+}
+EXPORT_SYMBOL_GPL(usb_role_switch_disallow_userspace_control);
+
+/**
  * usb_role_switch_register - Register USB Role Switch
  * @parent: Parent device for the switch
  * @desc: Description of the switch
@@ -226,6 +241,12 @@ usb_role_switch_register(struct device *parent,
 
 	mutex_init(&sw->lock);
 
+	/*
+	 * By default we allow userspace control, if a kernel driver gets a
+	 * reference and wants to disallow userspace control it can call:
+	 * usb_role_switch_disallow_userspace_control().
+	 */
+	sw->allow_userspace_control = true;
 	sw->usb2_port = desc->usb2_port;
 	sw->usb3_port = desc->usb3_port;
 	sw->udc = desc->udc;
