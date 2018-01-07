@@ -13,11 +13,9 @@
 #include <linux/mutex.h>
 #include <linux/slab.h>
 
-static DEFINE_IDA(role_ida);
 static struct class *role_class;
 
 struct usb_role_switch {
-	int id;
 	struct device dev;
 	struct mutex lock; /* device lock*/
 	enum usb_role role;
@@ -188,7 +186,6 @@ static void usb_role_switch_release(struct device *dev)
 {
 	struct usb_role_switch *sw = to_role_switch(dev);
 
-	ida_simple_remove(&role_ida, sw->id);
 	kfree(sw);
 }
 
@@ -219,7 +216,6 @@ usb_role_switch_register(struct device *parent,
 {
 	struct usb_role_switch *sw;
 	int ret;
-	int id;
 
 	if (!desc || !desc->set)
 		return ERR_PTR(-EINVAL);
@@ -228,13 +224,6 @@ usb_role_switch_register(struct device *parent,
 	if (!sw)
 		return ERR_PTR(-ENOMEM);
 
-	id = ida_simple_get(&role_ida, 0, 0, GFP_KERNEL);
-	if (id < 0) {
-		kfree(sw);
-		return ERR_PTR(id);
-	}
-
-	sw->id = id;
 	mutex_init(&sw->lock);
 
 	sw->usb2_port = desc->usb2_port;
@@ -245,7 +234,7 @@ usb_role_switch_register(struct device *parent,
 	sw->dev.parent = parent;
 	sw->dev.class = role_class;
 	sw->dev.type = &usb_role_dev_type;
-	dev_set_name(&sw->dev, "switch%d", id);
+	dev_set_name(&sw->dev, "%s-role-switch", dev_name(parent));
 
 	ret = device_register(&sw->dev);
 	if (ret) {
@@ -282,7 +271,6 @@ subsys_initcall(usb_roles_init);
 static void __exit usb_roles_exit(void)
 {
 	class_destroy(role_class);
-	ida_destroy(&role_ida);
 }
 module_exit(usb_roles_exit);
 
