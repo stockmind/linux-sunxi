@@ -1077,9 +1077,13 @@ static int uas_post_reset(struct usb_interface *intf)
 
 	err = uas_configure_endpoints(devinfo);
 	if (err) {
-		shost_printk(KERN_ERR, shost,
-			     "%s: alloc streams error %d after reset",
-			     __func__, err);
+		if (err != -ENODEV) {
+			shost_printk(KERN_ERR, shost,
+				     "%s: alloc streams error %d after reset",
+				     __func__, err);
+		}
+		/* So that scsi_remove_host in uas_disconnect does not hang */
+		scsi_unblock_requests(shost);
 		return 1;
 	}
 
