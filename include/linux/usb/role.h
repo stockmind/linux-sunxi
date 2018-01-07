@@ -19,6 +19,7 @@ typedef int (*usb_role_switch_set_t)(struct device *dev, enum usb_role role);
  * @usb3_port: Optional reference to the host controller port device (USB3)
  * @udc: Optional reference to the peripheral controller device
  * @set: Callback for setting the role
+ * @allow_userspace_control: If true userspace may change the role through sysfs
  *
  * @usb2_port and @usb3_port will point to the USB host port and @udc to the USB
  * device controller behind the USB connector with the role switch. If
@@ -31,6 +32,7 @@ struct usb_role_switch_desc {
 	struct device *usb3_port;
 	struct device *udc;
 	usb_role_switch_set_t set;
+	bool allow_userspace_control;
 };
 
 int usb_role_switch_set(struct usb_role_switch *sw, enum usb_role role);

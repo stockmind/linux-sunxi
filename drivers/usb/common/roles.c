@@ -26,6 +26,7 @@ struct usb_role_switch {
 	struct device *usb3_port;
 	struct device *udc;
 	usb_role_switch_set_t set;
+	bool allow_userspace_control;
 };
 
 #define to_role_switch(d)	container_of(d, struct usb_role_switch, dev)
@@ -102,10 +103,13 @@ EXPORT_SYMBOL_GPL(usb_role_switch_put);
 static umode_t
 usb_role_switch_is_visible(struct kobject *kobj, struct attribute *attr, int n)
 {
-	/*
-	 * FIXME: With USB Type-C ports, user space control can not be allowed.
-	 */
-	return attr->mode;
+	struct device *dev = container_of(kobj, typeof(*dev), kobj);
+	struct usb_role_switch *sw = to_role_switch(dev);
+
+	if (sw->allow_userspace_control)
+		return 0644;
+	else
+		return 0444;
 }
 
 static const char * const usb_roles[] = {
@@ -142,6 +146,10 @@ static ssize_t role_store(struct device *dev, struct device_attribute *attr,
 		if (ret || res)
 			return -EINVAL;
 	}
+
+	/* Catch users doing a chmod on the sysfs attr */
+	if (!sw->allow_userspace_control)
+		return -EPERM;
 
 	mutex_lock(&sw->lock);
 
@@ -230,6 +238,7 @@ usb_role_switch_register(struct device *parent,
 	sw->usb3_port = desc->usb3_port;
 	sw->udc = desc->udc;
 	sw->set = desc->set;
+	sw->allow_userspace_control = desc->allow_userspace_control;
 
 	sw->dev.parent = parent;
 	sw->dev.class = role_class;
