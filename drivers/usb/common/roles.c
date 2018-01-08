@@ -45,16 +45,15 @@ int usb_role_switch_set(struct usb_role_switch *sw, enum usb_role role)
 	if (!sw || IS_ERR(sw))
 		return 0;
 
-	if (sw->role == role)
-		return 0;
+	mutex_lock(&sw->lock);
 
 	ret = sw->set(sw->dev.parent, role);
-	if (ret)
-		return ret;
+	if (ret == 0)
+		sw->role = role;
 
-	sw->role = role;
+	mutex_unlock(&sw->lock);
 
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL_GPL(usb_role_switch_set);
 
@@ -151,13 +150,9 @@ static ssize_t role_store(struct device *dev, struct device_attribute *attr,
 			return -EINVAL;
 	}
 
-	mutex_lock(&sw->lock);
-
 	ret = usb_role_switch_set(sw, ret);
 	if (!ret)
 		ret = size;
-
-	mutex_unlock(&sw->lock);
 
 	return ret;
 }
