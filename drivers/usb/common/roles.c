@@ -26,6 +26,7 @@ struct usb_role_switch {
 	struct device *usb3_port;
 	struct device *udc;
 	usb_role_switch_set_t set;
+	usb_role_switch_get_t get;
 	bool allow_userspace_control;
 };
 
@@ -125,6 +126,9 @@ role_show(struct device *dev, struct device_attribute *attr, char *buf)
 	ssize_t ret;
 
 	mutex_lock(&sw->lock);
+	if (sw->get)
+		sw->role = sw->get(sw->dev.parent);
+
 	ret = sprintf(buf, "%s\n", usb_roles[sw->role]);
 	mutex_unlock(&sw->lock);
 
@@ -238,6 +242,7 @@ usb_role_switch_register(struct device *parent,
 	sw->usb3_port = desc->usb3_port;
 	sw->udc = desc->udc;
 	sw->set = desc->set;
+	sw->get = desc->get;
 	sw->allow_userspace_control = desc->allow_userspace_control;
 
 	sw->dev.parent = parent;
