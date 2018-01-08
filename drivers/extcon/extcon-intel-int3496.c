@@ -19,11 +19,16 @@
  */
 
 #include <linux/acpi.h>
+#include <linux/connection.h>
 #include <linux/extcon-provider.h>
 #include <linux/gpio.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/usb/role.h>
+
+#include <asm/cpu_device_id.h>
+#include <asm/intel-family.h>
 
 #define INT3496_GPIO_USB_ID	0
 #define INT3496_GPIO_VBUS_EN	1
@@ -34,6 +39,7 @@ struct int3496_data {
 	struct device *dev;
 	struct extcon_dev *edev;
 	struct delayed_work work;
+	struct usb_role_switch *role_sw;
 	struct gpio_desc *gpio_usb_id;
 	struct gpio_desc *gpio_vbus_en;
 	struct gpio_desc *gpio_usb_mux;
@@ -56,11 +62,17 @@ static const struct acpi_gpio_mapping acpi_int3496_default_gpios[] = {
 	{ },
 };
 
+static const struct x86_cpu_id cherry_trail_cpu_ids[] = {
+	{ X86_VENDOR_INTEL, 6, INTEL_FAM6_ATOM_AIRMONT, X86_FEATURE_ANY },
+	{}
+};
+
 static void int3496_do_usb_id(struct work_struct *work)
 {
 	struct int3496_data *data =
 		container_of(work, struct int3496_data, work.work);
-	int id = gpiod_get_value_cansleep(data->gpio_usb_id);
+	int ret, id = gpiod_get_value_cansleep(data->gpio_usb_id);
+	enum usb_role role = id ? USB_ROLE_DEVICE : USB_ROLE_HOST;
 
 	/* id == 1: PERIPHERAL, id == 0: HOST */
 	dev_dbg(data->dev, "Connected %s cable\n", id ? "PERIPHERAL" : "HOST");
@@ -71,6 +83,12 @@ static void int3496_do_usb_id(struct work_struct *work)
 	 */
 	if (!IS_ERR(data->gpio_usb_mux))
 		gpiod_direction_output(data->gpio_usb_mux, id);
+
+	if (data->role_sw) {
+		ret = usb_role_switch_set(data->role_sw, role);
+		if (ret)
+			dev_err(data->dev, "Error setting role: %d\n", ret);
+	}
 
 	if (!IS_ERR(data->gpio_vbus_en))
 		gpiod_direction_output(data->gpio_vbus_en, !id);
@@ -107,11 +125,30 @@ static int int3496_probe(struct platform_device *pdev)
 	data->dev = dev;
 	INIT_DELAYED_WORK(&data->work, int3496_do_usb_id);
 
+	if (x86_match_cpu(cherry_trail_cpu_ids)) {
+		struct devcon role_sw_conn = {
+			.endpoint[0] = dev_name(dev),
+			.endpoint[1] = "intel_cht_usb_sw-role-switch",
+			.id = "usb-role-switch",
+		};
+
+		add_device_connection(&role_sw_conn);
+		data->role_sw = usb_role_switch_get(dev);
+		remove_device_connection(&role_sw_conn);
+
+		if (IS_ERR(data->role_sw)) {
+			ret = PTR_ERR(data->role_sw);
+			if (ret != -EPROBE_DEFER)
+				dev_err(dev, "can't get switch: %d\n", ret);
+			return ret;
+		}
+	}
+
 	data->gpio_usb_id = devm_gpiod_get(dev, "id", GPIOD_IN);
 	if (IS_ERR(data->gpio_usb_id)) {
 		ret = PTR_ERR(data->gpio_usb_id);
 		dev_err(dev, "can't request USB ID GPIO: %d\n", ret);
-		return ret;
+		goto out_unregister_role_sw;
 	} else if (gpiod_get_direction(data->gpio_usb_id) != GPIOF_DIR_IN) {
 		dev_warn(dev, FW_BUG "USB ID GPIO not in input mode, fixing\n");
 		gpiod_direction_input(data->gpio_usb_id);
@@ -120,7 +157,8 @@ static int int3496_probe(struct platform_device *pdev)
 	data->usb_id_irq = gpiod_to_irq(data->gpio_usb_id);
 	if (data->usb_id_irq < 0) {
 		dev_err(dev, "can't get USB ID IRQ: %d\n", data->usb_id_irq);
-		return data->usb_id_irq;
+		ret = data->usb_id_irq;
+		goto out_unregister_role_sw;
 	}
 
 	data->gpio_vbus_en = devm_gpiod_get(dev, "vbus", GPIOD_ASIS);
@@ -133,13 +171,15 @@ static int int3496_probe(struct platform_device *pdev)
 
 	/* register extcon device */
 	data->edev = devm_extcon_dev_allocate(dev, int3496_cable);
-	if (IS_ERR(data->edev))
-		return -ENOMEM;
+	if (IS_ERR(data->edev)) {
+		ret = -ENOMEM;
+		goto out_unregister_role_sw;
+	}
 
 	ret = devm_extcon_dev_register(dev, data->edev);
 	if (ret < 0) {
 		dev_err(dev, "can't register extcon device: %d\n", ret);
-		return ret;
+		goto out_unregister_role_sw;
 	}
 
 	ret = devm_request_threaded_irq(dev, data->usb_id_irq,
@@ -150,7 +190,7 @@ static int int3496_probe(struct platform_device *pdev)
 					dev_name(dev), data);
 	if (ret < 0) {
 		dev_err(dev, "can't request IRQ for USB ID GPIO: %d\n", ret);
-		return ret;
+		goto out_unregister_role_sw;
 	}
 
 	/* queue initial processing of id-pin */
@@ -159,6 +199,12 @@ static int int3496_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, data);
 
 	return 0;
+
+out_unregister_role_sw:
+	if (data->role_sw)
+		usb_role_switch_put(data->role_sw);
+
+	return ret;
 }
 
 static int int3496_remove(struct platform_device *pdev)
@@ -167,6 +213,9 @@ static int int3496_remove(struct platform_device *pdev)
 
 	devm_free_irq(&pdev->dev, data->usb_id_irq, data);
 	cancel_delayed_work_sync(&data->work);
+
+	if (data->role_sw)
+		usb_role_switch_put(data->role_sw);
 
 	return 0;
 }
