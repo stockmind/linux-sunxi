@@ -12,6 +12,7 @@ enum usb_role {
 };
 
 typedef int (*usb_role_switch_set_t)(struct device *dev, enum usb_role role);
+typedef enum usb_role (*usb_role_switch_get_t)(struct device *dev);
 
 /**
  * struct usb_role_switch_desc - USB Role Switch Descriptor
@@ -19,6 +20,7 @@ typedef int (*usb_role_switch_set_t)(struct device *dev, enum usb_role role);
  * @usb3_port: Optional reference to the host controller port device (USB3)
  * @udc: Optional reference to the peripheral controller device
  * @set: Callback for setting the role
+ * @get: Callback for reading the current role from the hw (optional)
  *
  * @usb2_port and @usb3_port will point to the USB host port and @udc to the USB
  * device controller behind the USB connector with the role switch. If
@@ -31,6 +33,7 @@ struct usb_role_switch_desc {
 	struct device *usb3_port;
 	struct device *udc;
 	usb_role_switch_set_t set;
+	usb_role_switch_get_t get;
 };
 
 int usb_role_switch_set(struct usb_role_switch *sw, enum usb_role role);
