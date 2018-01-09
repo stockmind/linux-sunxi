@@ -345,7 +345,7 @@ static enum tcpm_state tcpm_default_state(struct tcpm_port *port)
 		else if (port->tcpc->config->default_role == TYPEC_SINK)
 			return SNK_UNATTACHED;
 		/* Fall through to return SRC_UNATTACHED */
-	} else if (port->port_type == TYPEC_PORT_UFP) {
+	} else if (port->port_type == TYPEC_PORT_SNK) {
 		return SNK_UNATTACHED;
 	}
 	return SRC_UNATTACHED;
@@ -2093,7 +2093,7 @@ static inline enum tcpm_state unattached_state(struct tcpm_port *port)
 			return SRC_UNATTACHED;
 		else
 			return SNK_UNATTACHED;
-	} else if (port->port_type == TYPEC_PORT_DFP) {
+	} else if (port->port_type == TYPEC_PORT_SRC) {
 		return SRC_UNATTACHED;
 	}
 
@@ -3387,7 +3387,7 @@ static int tcpm_port_type_set(const struct typec_capability *cap,
 		if (!(port->pwr_role == TYPEC_SINK &&
 		      port->data_role == TYPEC_DEVICE))
 			tcpm_set_state(port, PORT_RESET, 0);
-	} else if (type == TYPEC_PORT_DFP) {
+	} else if (type == TYPEC_PORT_SRC) {
 		if (!(port->pwr_role == TYPEC_SOURCE &&
 		      port->data_role == TYPEC_HOST))
 			tcpm_set_state(port, PORT_RESET, 0);
