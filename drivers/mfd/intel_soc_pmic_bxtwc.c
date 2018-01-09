@@ -264,7 +264,9 @@ static struct mfd_cell bxt_wc_dev[] = {
 	},
 };
 
-static struct devcon bxtwc_devcon = DEVCON("bxt_wcove_usbc", "switch0", NULL);
+static struct devcon bxtwc_devcon =
+	DEVCON("bxt_wcove_usbc", "intel_cht_usb_sw-role-switch",
+	       "usb-role-switch");
 
 static int regmap_ipc_byte_reg_read(void *context, unsigned int reg,
 				    unsigned int *val)
