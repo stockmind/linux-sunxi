@@ -1506,7 +1506,7 @@ struct typec_port *typec_register_port(struct device *parent,
 		if (cap->prefer_role != TYPEC_NO_PREFERRED_ROLE)
 			port->pwr_role = cap->prefer_role;
 		else
-			port->data_role = TYPEC_SINK;
+			port->pwr_role = TYPEC_SINK;
 		break;
 	}
 
