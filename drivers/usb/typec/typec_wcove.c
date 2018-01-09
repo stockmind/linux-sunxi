@@ -634,10 +634,11 @@ static int wcove_typec_probe(struct platform_device *pdev)
 		return PTR_ERR(wcove->tcpm);
 
 	wcove->role_sw = usb_role_switch_get(&pdev->dev);
-	if (IS_ERR_OR_NULL(wcove->role_sw)) {
+	if (IS_ERR(wcove->role_sw)) {
 		tcpm_unregister_port(wcove->tcpm);
-		return -ENODEV;
+		return PTR_ERR(wcove->role_sw);
 	}
+	usb_role_switch_disallow_userspace_control(wcove->role_sw);
 
 	ret = devm_request_threaded_irq(&pdev->dev, irq, NULL,
 					wcove_typec_irq, IRQF_ONESHOT,
