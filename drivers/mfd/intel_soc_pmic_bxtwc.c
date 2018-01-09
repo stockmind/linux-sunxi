@@ -23,6 +23,7 @@
 #include <linux/mfd/intel_soc_pmic.h>
 #include <linux/mfd/intel_soc_pmic_bxtwc.h>
 #include <asm/intel_pmc_ipc.h>
+#include <linux/connection.h>
 
 /* PMIC device registers */
 #define REG_ADDR_MASK		0xFF00
@@ -262,6 +263,8 @@ static struct mfd_cell bxt_wc_dev[] = {
 		.name = "bxt_wcove_region",
 	},
 };
+
+static struct devcon bxtwc_devcon = DEVCON("bxt_wcove_usbc", "switch0", NULL);
 
 static int regmap_ipc_byte_reg_read(void *context, unsigned int reg,
 				    unsigned int *val)
@@ -534,16 +537,20 @@ static int bxtwc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	add_device_connection(&bxtwc_devcon);
+
 	ret = devm_mfd_add_devices(&pdev->dev, PLATFORM_DEVID_NONE, bxt_wc_dev,
 				   ARRAY_SIZE(bxt_wc_dev), NULL, 0, NULL);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to add devices\n");
+		remove_device_connection(&bxtwc_devcon);
 		return ret;
 	}
 
 	ret = sysfs_create_group(&pdev->dev.kobj, &bxtwc_group);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to create sysfs group %d\n", ret);
+		remove_device_connection(&bxtwc_devcon);
 		return ret;
 	}
 
@@ -563,6 +570,7 @@ static int bxtwc_probe(struct platform_device *pdev)
 static int bxtwc_remove(struct platform_device *pdev)
 {
 	sysfs_remove_group(&pdev->dev.kobj, &bxtwc_group);
+	remove_device_connection(&bxtwc_devcon);
 
 	return 0;
 }
