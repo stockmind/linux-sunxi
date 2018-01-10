@@ -8,7 +8,6 @@
 
 #include <linux/acpi.h>
 #include <linux/module.h>
-#include <linux/usb/role.h>
 #include <linux/usb/tcpm.h>
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
@@ -154,8 +153,6 @@ struct wcove_typec {
 
 	struct tcpc_dev tcpc;
 	struct tcpm_port *tcpm;
-
-	struct usb_role_switch *role_sw;
 };
 
 #define tcpc_to_wcove(_tcpc_) container_of(_tcpc_, struct wcove_typec, tcpc)
@@ -308,16 +305,7 @@ static int wcove_set_roles(struct tcpc_dev *tcpc, bool attached,
 			   enum typec_role role, enum typec_data_role data)
 {
 	struct wcove_typec *wcove = tcpc_to_wcove(tcpc);
-	enum usb_role urole = USB_ROLE_NONE;
 	unsigned int val;
-	int ret;
-
-	if (attached)
-		urole = (data == TYPEC_HOST) ? USB_ROLE_HOST : USB_ROLE_DEVICE;
-
-	ret = usb_role_switch_set(wcove->role_sw, urole);
-	if (ret)
-		return ret;
 
 	val = role;
 	val |= data << USBC_PDCFG3_DATAROLE_SHIFT;
@@ -633,18 +621,10 @@ static int wcove_typec_probe(struct platform_device *pdev)
 	if (IS_ERR(wcove->tcpm))
 		return PTR_ERR(wcove->tcpm);
 
-	wcove->role_sw = usb_role_switch_get(&pdev->dev);
-	if (IS_ERR(wcove->role_sw)) {
-		tcpm_unregister_port(wcove->tcpm);
-		return PTR_ERR(wcove->role_sw);
-	}
-	usb_role_switch_disallow_userspace_control(wcove->role_sw);
-
 	ret = devm_request_threaded_irq(&pdev->dev, irq, NULL,
 					wcove_typec_irq, IRQF_ONESHOT,
 					"wcove_typec", wcove);
 	if (ret) {
-		usb_role_switch_put(wcove->role_sw);
 		tcpm_unregister_port(wcove->tcpm);
 		return ret;
 	}
@@ -664,7 +644,6 @@ static int wcove_typec_remove(struct platform_device *pdev)
 	regmap_read(wcove->regmap, USBC_IRQMASK2, &val);
 	regmap_write(wcove->regmap, USBC_IRQMASK2, val | USBC_IRQMASK2_ALL);
 
-	usb_role_switch_put(wcove->role_sw);
 	tcpm_unregister_port(wcove->tcpm);
 
 	return 0;
