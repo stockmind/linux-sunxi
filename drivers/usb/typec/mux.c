@@ -62,7 +62,7 @@ EXPORT_SYMBOL_GPL(typec_switch_get);
  */
 void typec_switch_put(struct typec_switch *sw)
 {
-	if (sw)
+	if (!IS_ERR_OR_NULL(sw))
 		put_device(sw->dev);
 }
 EXPORT_SYMBOL_GPL(typec_switch_put);
@@ -148,7 +148,7 @@ EXPORT_SYMBOL_GPL(typec_mux_get);
  */
 void typec_mux_put(struct typec_mux *mux)
 {
-	if (mux)
+	if (!IS_ERR_OR_NULL(mux))
 		put_device(mux->dev);
 }
 EXPORT_SYMBOL_GPL(typec_mux_put);
