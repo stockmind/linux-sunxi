@@ -35,8 +35,10 @@ static void *typec_switch_match(struct devcon *con, int ep, void *data)
  * typec_switch_get - Find USB Type-C orientation switch
  * @dev: The caller device
  *
- * Finds a switch linked with @dev. If a switch is found, the reference count
- * for it is incremented.
+ * Finds a switch linked with @dev. Returns a reference to the switch on
+ * success, NULL if no matching connection was found, or
+ * ERR_PTR(-EPROBE_DEFER) when a connection was found but the switch
+ * has not been enumerated yet.
  */
 struct typec_switch *typec_switch_get(struct device *dev)
 {
@@ -121,7 +123,9 @@ static void *typec_mux_match(struct devcon *con, int ep, void *data)
  * @dev: The caller device
  *
  * Finds a mux linked to the caller. This function is primarily meant for the
- * Type-C drivers. If a mux is found, the reference count for it is incremented.
+ * Type-C drivers. Returns a reference to the mux on success, NULL if no
+ * matching connection was found, or ERR_PTR(-EPROBE_DEFER) when a connection
+ * was found but the mux has not been enumerated yet.
  */
 struct typec_mux *typec_mux_get(struct device *dev)
 {
