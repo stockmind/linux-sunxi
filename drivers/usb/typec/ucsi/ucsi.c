@@ -613,8 +613,8 @@ static int ucsi_register_port(struct ucsi *ucsi, int index)
 
 	/* Register the connector */
 	con->port = typec_register_port(ucsi->dev, cap);
-	if (!con->port)
-		return -ENODEV;
+	if (IS_ERR(con->port))
+		return PTR_ERR(con->port);
 
 	/* Get the status */
 	UCSI_CMD_GET_CONNECTOR_STATUS(ctrl, con->num);

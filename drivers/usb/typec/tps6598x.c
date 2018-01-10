@@ -426,8 +426,8 @@ static int tps6598x_probe(struct i2c_client *client)
 	}
 
 	tps->port = typec_register_port(&client->dev, &tps->typec_cap);
-	if (!tps->port)
-		return -ENODEV;
+	if (IS_ERR(tps->port))
+		return PTR_ERR(tps->port);
 
 	if (status & TPS_STATUS_PLUG_PRESENT) {
 		ret = tps6598x_connect(tps, status);

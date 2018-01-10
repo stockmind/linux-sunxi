@@ -1474,7 +1474,7 @@ EXPORT_SYMBOL_GPL(typec_port_register_altmode);
  *
  * Registers a device for USB Type-C Port described in @cap.
  *
- * Returns handle to the port on success or NULL on failure.
+ * Returns handle to the port on success or an ERR_PTR on failure.
  */
 struct typec_port *typec_register_port(struct device *parent,
 				       const struct typec_capability *cap)
@@ -1485,12 +1485,12 @@ struct typec_port *typec_register_port(struct device *parent,
 
 	port = kzalloc(sizeof(*port), GFP_KERNEL);
 	if (!port)
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 
 	id = ida_simple_get(&typec_index_ida, 0, 0, GFP_KERNEL);
 	if (id < 0) {
 		kfree(port);
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 	}
 
 	switch (cap->type) {
@@ -1543,7 +1543,7 @@ struct typec_port *typec_register_port(struct device *parent,
 	if (ret) {
 		dev_err(parent, "failed to register port (%d)\n", ret);
 		put_device(&port->dev);
-		return NULL;
+		return ERR_PTR(ret);
 	}
 
 	port->sw = typec_switch_get(cap->fwnode ? &port->dev : parent);
@@ -1561,7 +1561,7 @@ EXPORT_SYMBOL_GPL(typec_register_port);
  */
 void typec_unregister_port(struct typec_port *port)
 {
-	if (port)
+	if (!IS_ERR_OR_NULL(port))
 		device_unregister(&port->dev);
 }
 EXPORT_SYMBOL_GPL(typec_unregister_port);
