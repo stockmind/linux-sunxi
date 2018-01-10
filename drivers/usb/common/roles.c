@@ -96,7 +96,8 @@ EXPORT_SYMBOL_GPL(usb_role_switch_get);
  */
 void usb_role_switch_put(struct usb_role_switch *sw)
 {
-	put_device(&sw->dev);
+	if (!IS_ERR_OR_NULL(sw))
+		put_device(&sw->dev);
 }
 EXPORT_SYMBOL_GPL(usb_role_switch_put);
 
