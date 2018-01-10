@@ -1489,8 +1489,26 @@ struct typec_port *typec_register_port(struct device *parent,
 
 	id = ida_simple_get(&typec_index_ida, 0, 0, GFP_KERNEL);
 	if (id < 0) {
-		kfree(port);
-		return ERR_PTR(-ENOMEM);
+		ret = -ENOMEM;
+		goto err;
+	}
+
+	port->sw = typec_switch_get(cap->fwnode ? &port->dev : parent);
+	if (IS_ERR(port->sw)) {
+		ret = PTR_ERR(port->sw);
+		if (ret != -ENODEV)
+			goto err;
+
+		port->sw = NULL;
+	}
+
+	port->mux = typec_mux_get(cap->fwnode ? &port->dev : parent);
+	if (IS_ERR(port->mux)) {
+		ret = PTR_ERR(port->mux);
+		if (ret != -ENODEV)
+			goto err;
+
+		port->mux = NULL;
 	}
 
 	switch (cap->type) {
@@ -1543,13 +1561,16 @@ struct typec_port *typec_register_port(struct device *parent,
 	if (ret) {
 		dev_err(parent, "failed to register port (%d)\n", ret);
 		put_device(&port->dev);
-		return ERR_PTR(ret);
+		goto err;
 	}
 
-	port->sw = typec_switch_get(cap->fwnode ? &port->dev : parent);
-	port->mux = typec_mux_get(cap->fwnode ? &port->dev : parent);
-
 	return port;
+
+err:
+	typec_mux_put(port->mux);
+	typec_switch_put(port->sw);
+	kfree(port);
+	return ERR_PTR(ret);
 }
 EXPORT_SYMBOL_GPL(typec_register_port);
 
@@ -1561,7 +1582,7 @@ EXPORT_SYMBOL_GPL(typec_register_port);
  */
 void typec_unregister_port(struct typec_port *port)
 {
-	if (!IS_ERR_OR_NULL(port))
+	if (port)
 		device_unregister(&port->dev);
 }
 EXPORT_SYMBOL_GPL(typec_unregister_port);
