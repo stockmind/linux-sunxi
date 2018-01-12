@@ -15,6 +15,8 @@
  * GNU General Public License for more details.
  */
 
+#include <linux/acpi.h>
+#include <linux/connection.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/io.h>
@@ -26,6 +28,10 @@
 #include <linux/extcon-provider.h>
 #include <linux/regmap.h>
 #include <linux/mfd/axp20x.h>
+#include <linux/usb/role.h>
+
+#include <asm/cpu_device_id.h>
+#include <asm/intel-family.h>
 
 /* Power source status register */
 #define PS_STAT_VBUS_TRIGGER		BIT(0)
@@ -98,11 +104,17 @@ struct axp288_extcon_info {
 	struct device *dev;
 	struct regmap *regmap;
 	struct regmap_irq_chip_data *regmap_irqc;
+	struct usb_role_switch *role_sw;
 	struct delayed_work det_work;
 	int irq[EXTCON_IRQ_END];
 	struct extcon_dev *edev;
 	unsigned int previous_cable;
 	bool first_detect_done;
+};
+
+static const struct x86_cpu_id cherry_trail_cpu_ids[] = {
+	{ X86_VENDOR_INTEL, 6, INTEL_FAM6_ATOM_AIRMONT, X86_FEATURE_ANY },
+	{}
 };
 
 /* Power up/down reason string array */
@@ -140,8 +152,12 @@ static void axp288_extcon_log_rsi(struct axp288_extcon_info *info)
 	regmap_write(info->regmap, AXP288_PS_BOOT_REASON_REG, clear_mask);
 }
 
-static void axp288_chrg_detect_complete(struct axp288_extcon_info *info)
+static void axp288_chrg_detect_complete(struct axp288_extcon_info *info,
+					bool vbus_attach)
 {
+	enum usb_role role;
+	int ret;
+
 	/*
 	 * We depend on other drivers to do things like mux the data lines,
 	 * enable/disable vbus based on the id-pin, etc. Sometimes the BIOS has
@@ -156,6 +172,28 @@ static void axp288_chrg_detect_complete(struct axp288_extcon_info *info)
 			queue_delayed_work(system_wq, &info->det_work,
 					   msecs_to_jiffies(2000));
 		info->first_detect_done = true;
+	}
+
+	/*
+	 * On devices without the INT3496 ACPI devices the USB role should be
+	 * controlled by the AML code, but the AML code typically only switches
+	 * between the host and none roles, because of Windows not really using
+	 * device mode. To make device mode work see what mode the AML code has
+	 * set and if it is not host mode switch between device / none.
+	 */
+	if (!info->role_sw)
+		return; /* Role controlled by INT3496 extcon code. */
+
+	role = usb_role_switch_get_role(info->role_sw);
+	if (role != USB_ROLE_HOST) {
+		if (vbus_attach)
+			role = USB_ROLE_DEVICE;
+		else
+			role = USB_ROLE_NONE;
+
+		ret = usb_role_switch_set_role(info->role_sw, role);
+		if (ret)
+			dev_err(info->dev, "Error setting role: %d\n", ret);
 	}
 }
 
@@ -223,7 +261,7 @@ no_vbus:
 		info->previous_cable = cable;
 	}
 
-	axp288_chrg_detect_complete(info);
+	axp288_chrg_detect_complete(info, vbus_attach);
 
 	return 0;
 
@@ -262,6 +300,7 @@ static int axp288_extcon_probe(struct platform_device *pdev)
 {
 	struct axp288_extcon_info *info;
 	struct axp20x_dev *axp20x = dev_get_drvdata(pdev->dev.parent);
+	struct device *dev = &pdev->dev;
 	int ret, i, pirq;
 
 	info = devm_kzalloc(&pdev->dev, sizeof(*info), GFP_KERNEL);
@@ -276,6 +315,13 @@ static int axp288_extcon_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, info);
 
+	/* See axp288_chrg_detect_complete for why we may need the role-sw */
+	info->role_sw = usb_role_switch_get(dev);
+	if (IS_ERR(info->role_sw))
+		return PTR_ERR(info->role_sw);
+	if (info->role_sw)
+		dev_info(dev, "controlling USB role based on vbus presence\n");
+
 	axp288_extcon_log_rsi(info);
 
 	/* Initialize extcon device */
@@ -283,14 +329,15 @@ static int axp288_extcon_probe(struct platform_device *pdev)
 					      axp288_extcon_cables);
 	if (IS_ERR(info->edev)) {
 		dev_err(&pdev->dev, "failed to allocate memory for extcon\n");
-		return PTR_ERR(info->edev);
+		ret = PTR_ERR(info->edev);
+		goto err;
 	}
 
 	/* Register extcon device */
 	ret = devm_extcon_dev_register(&pdev->dev, info->edev);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to register extcon device\n");
-		return ret;
+		goto err;
 	}
 
 	for (i = 0; i < EXTCON_IRQ_END; i++) {
@@ -300,7 +347,7 @@ static int axp288_extcon_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev,
 				"failed to get virtual interrupt=%d\n", pirq);
 			ret = info->irq[i];
-			return ret;
+			goto err;
 		}
 
 		ret = devm_request_threaded_irq(&pdev->dev, info->irq[i],
@@ -310,13 +357,25 @@ static int axp288_extcon_probe(struct platform_device *pdev)
 		if (ret) {
 			dev_err(&pdev->dev, "failed to request interrupt=%d\n",
 							info->irq[i]);
-			return ret;
+			goto err;
 		}
 	}
 
 	/* Start charger cable type detection */
 	queue_delayed_work(system_wq, &info->det_work, 0);
 
+	return 0;
+
+err:
+	usb_role_switch_put(info->role_sw);
+	return ret;
+}
+
+static int axp288_extcon_remove(struct platform_device *pdev)
+{
+	struct axp288_extcon_info *info = platform_get_drvdata(pdev);
+
+	usb_role_switch_put(info->role_sw);
 	return 0;
 }
 
@@ -328,13 +387,41 @@ MODULE_DEVICE_TABLE(platform, axp288_extcon_table);
 
 static struct platform_driver axp288_extcon_driver = {
 	.probe = axp288_extcon_probe,
+	.remove = axp288_extcon_remove,
 	.id_table = axp288_extcon_table,
 	.driver = {
 		.name = "axp288_extcon",
 	},
 };
-module_platform_driver(axp288_extcon_driver);
+
+static struct devcon axp288_extcon_role_sw_conn = {
+	.endpoint[0] = "axp288_extcon",
+	.endpoint[1] = "intel_cht_usb_sw-role-switch",
+	.id = "usb-role-switch",
+	.list = LIST_HEAD_INIT(axp288_extcon_role_sw_conn.list),
+};
+
+static int __init axp288_extcon_init(void)
+{
+	/* See comment in axp288_chrg_detect_complete */
+	if (x86_match_cpu(cherry_trail_cpu_ids) &&
+	    !acpi_dev_present("INT3496", NULL, -1))
+		add_device_connection(&axp288_extcon_role_sw_conn);
+
+	return platform_driver_register(&axp288_extcon_driver);
+}
+module_init(axp288_extcon_init);
+
+static void __exit axp288_extcon_exit(void)
+{
+	if (!list_empty(&axp288_extcon_role_sw_conn.list))
+		remove_device_connection(&axp288_extcon_role_sw_conn);
+
+	platform_driver_unregister(&axp288_extcon_driver);
+}
+module_exit(axp288_extcon_exit);
 
 MODULE_AUTHOR("Ramakrishna Pallala <ramakrishna.pallala@intel.com>");
+MODULE_AUTHOR("Hans de Goede <hdegoede@redhat.com>");
 MODULE_DESCRIPTION("X-Powers AXP288 extcon driver");
 MODULE_LICENSE("GPL v2");
