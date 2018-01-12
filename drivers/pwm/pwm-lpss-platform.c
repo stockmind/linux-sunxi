@@ -52,7 +52,14 @@ static int pwm_lpss_probe_platform(struct platform_device *pdev)
 		return -ENODEV;
 
 	info = (const struct pwm_lpss_boardinfo *)id->driver_data;
+
+	/*
+	 * Some boards which don't use the pwm controller have an empty
+	 * resources table, so if we cannot get the resource, return -ENODEV.
+	 */
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!r)
+		return -ENODEV;
 
 	lpwm = pwm_lpss_probe(&pdev->dev, r, info);
 	if (IS_ERR(lpwm))
