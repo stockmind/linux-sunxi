@@ -113,7 +113,7 @@ usb_role_switch_is_visible(struct kobject *kobj, struct attribute *attr, int n)
 }
 
 static const char * const usb_roles[] = {
-	[USB_ROLE_NONE]		= "unknown",
+	[USB_ROLE_NONE]		= "none",
 	[USB_ROLE_HOST]		= "host",
 	[USB_ROLE_DEVICE]	= "device",
 };
