@@ -101,8 +101,10 @@ static void *generic_match(struct devcon *con, int ep, void *data)
  * @con_id: Identifier for the connection
  *
  * Find a connection with unique identifier @con_id between @dev and an
- * other device. Returns handle to the device that is connected to @dev or
- * NULL. The reference count for the found device is incremented.
+ * other device. On success returns handle to the device that is connected
+ * to @dev, with the reference count for the found device incremented. Returns
+ * NULL if no matching connection was found, or ERR_PTR(-EPROBE_DEFER) when a
+ * connection was found but the other device has not been enumerated yet.
  */
 struct device *device_find_connection(struct device *dev, const char *con_id)
 {
@@ -131,5 +133,7 @@ void remove_device_connection(struct devcon *con)
 	mutex_lock(&devcon_lock);
 	list_del_rcu(&con->list);
 	mutex_unlock(&devcon_lock);
+	/* The caller may free the devcon struct immediately afterwards. */
+	synchronize_rcu();
 }
 EXPORT_SYMBOL_GPL(remove_device_connection);
