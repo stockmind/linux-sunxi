@@ -39,6 +39,7 @@ struct usb_role_switch_desc {
 };
 
 int usb_role_switch_set_role(struct usb_role_switch *sw, enum usb_role role);
+enum usb_role usb_role_switch_get_role(struct usb_role_switch *sw);
 struct usb_role_switch *usb_role_switch_get(struct device *dev);
 void usb_role_switch_put(struct usb_role_switch *sw);
 

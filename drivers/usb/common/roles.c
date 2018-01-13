@@ -58,6 +58,34 @@ int usb_role_switch_set_role(struct usb_role_switch *sw, enum usb_role role)
 }
 EXPORT_SYMBOL_GPL(usb_role_switch_set_role);
 
+/**
+ * usb_role_switch_get_role - Get the USB role for a switch
+ * @sw: USB role switch
+ *
+ * Depending on the role-switch-driver this function returns either a cached
+ * value of the last set role, or reads back the actual value from the hardware
+ * (which may have been changed by e.g. firmware).
+ */
+enum usb_role usb_role_switch_get_role(struct usb_role_switch *sw)
+{
+	enum usb_role role;
+
+	if (IS_ERR_OR_NULL(sw))
+		return USB_ROLE_NONE;
+
+	mutex_lock(&sw->lock);
+
+	if (sw->get)
+		role = sw->get(sw->dev.parent);
+	else
+		role = sw->role;
+
+	mutex_unlock(&sw->lock);
+
+	return role;
+}
+EXPORT_SYMBOL_GPL(usb_role_switch_get_role);
+
 static int __switch_match(struct device *dev, const void *name)
 {
 	return !strcmp((const char *)name, dev_name(dev));
@@ -122,16 +150,9 @@ static ssize_t
 role_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct usb_role_switch *sw = to_role_switch(dev);
-	ssize_t ret;
+	enum usb_role role = usb_role_switch_get_role(sw);
 
-	mutex_lock(&sw->lock);
-	if (sw->get)
-		sw->role = sw->get(sw->dev.parent);
-
-	ret = sprintf(buf, "%s\n", usb_roles[sw->role]);
-	mutex_unlock(&sw->lock);
-
-	return ret;
+	return sprintf(buf, "%s\n", usb_roles[role]);
 }
 
 static ssize_t role_store(struct device *dev, struct device_attribute *attr,
