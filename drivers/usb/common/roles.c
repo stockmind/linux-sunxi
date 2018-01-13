@@ -33,13 +33,13 @@ struct usb_role_switch {
 #define to_role_switch(d)	container_of(d, struct usb_role_switch, dev)
 
 /**
- * usb_role_switch_set - Set USB role for a switch
+ * usb_role_switch_set_role - Set USB role for a switch
  * @sw: USB role switch
  * @role: USB role to be switched to
  *
  * Set USB role @role for @sw.
  */
-int usb_role_switch_set(struct usb_role_switch *sw, enum usb_role role)
+int usb_role_switch_set_role(struct usb_role_switch *sw, enum usb_role role)
 {
 	int ret;
 
@@ -56,7 +56,7 @@ int usb_role_switch_set(struct usb_role_switch *sw, enum usb_role role)
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(usb_role_switch_set);
+EXPORT_SYMBOL_GPL(usb_role_switch_set_role);
 
 static int __switch_match(struct device *dev, const void *name)
 {
@@ -154,7 +154,7 @@ static ssize_t role_store(struct device *dev, struct device_attribute *attr,
 	if (!sw->allow_userspace_control)
 		return -EPERM;
 
-	ret = usb_role_switch_set(sw, ret);
+	ret = usb_role_switch_set_role(sw, ret);
 	if (!ret)
 		ret = size;
 
