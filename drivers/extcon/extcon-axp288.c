@@ -145,16 +145,16 @@ static void axp288_chrg_detect_complete(struct axp288_extcon_info *info)
 	/*
 	 * We depend on other drivers to do things like mux the data lines,
 	 * enable/disable vbus based on the id-pin, etc. Sometimes the BIOS has
-	 * not set these things up correctly resulting in the initial charger
-	 * cable type detection giving a wrong result and we end up not charging
-	 * or charging at only 0.5A.
+	 * not set these things up correctly resulting in a wrong result for the
+	 * initial charger type detection and we end up charging at only 0.5A.
 	 *
-	 * So we schedule a second cable type detection after 2 seconds to
-	 * give the other drivers time to load and do their thing.
+	 * If our first detect detects an SDP charger-type, we try again after
+	 * 2 seconds to give the other drivers time to load and do their thing.
 	 */
 	if (!info->first_detect_done) {
-		queue_delayed_work(system_wq, &info->det_work,
-				   msecs_to_jiffies(2000));
+		if (info->previous_cable == EXTCON_CHG_USB_SDP)
+			queue_delayed_work(system_wq, &info->det_work,
+					   msecs_to_jiffies(2000));
 		info->first_detect_done = true;
 	}
 }
