@@ -33,6 +33,9 @@ int i2c_check_7bit_addr_validity_strict(unsigned short addr);
 const struct acpi_device_id *
 i2c_acpi_match_device(const struct acpi_device_id *matches,
 		      struct i2c_client *client);
+int i2c_acpi_device_uevent(struct i2c_client *client,
+			   struct kobj_uevent_env *env);
+int i2c_acpi_device_modalias(struct i2c_client *client, char *buf, int size);
 void i2c_acpi_register_devices(struct i2c_adapter *adap);
 #else /* CONFIG_ACPI */
 static inline void i2c_acpi_register_devices(struct i2c_adapter *adap) { }
@@ -41,6 +44,16 @@ i2c_acpi_match_device(const struct acpi_device_id *matches,
 		      struct i2c_client *client)
 {
 	return NULL;
+}
+static inline int i2c_acpi_device_uevent(struct i2c_client *client,
+					 struct kobj_uevent_env *env)
+{
+	return -ENODEV;
+}
+static inline int i2c_acpi_device_modalias(struct i2c_client *client,
+					   char *buf, int size)
+{
+	return -ENODEV;
 }
 #endif /* CONFIG_ACPI */
 extern struct notifier_block i2c_acpi_notifier;

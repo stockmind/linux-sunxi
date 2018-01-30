@@ -109,7 +109,7 @@ static int i2c_device_match(struct device *dev, struct device_driver *drv)
 		return 1;
 
 	/* Then ACPI style match */
-	if (acpi_driver_match_device(dev, drv))
+	if (i2c_acpi_match_device(drv->acpi_match_table, client))
 		return 1;
 
 	driver = to_i2c_driver(drv);
@@ -130,7 +130,7 @@ static int i2c_device_uevent(struct device *dev, struct kobj_uevent_env *env)
 	if (rc != -ENODEV)
 		return rc;
 
-	rc = acpi_device_uevent_modalias(dev, env);
+	rc = i2c_acpi_device_uevent(client, env);
 	if (rc != -ENODEV)
 		return rc;
 
@@ -451,7 +451,7 @@ show_modalias(struct device *dev, struct device_attribute *attr, char *buf)
 	if (len != -ENODEV)
 		return len;
 
-	len = acpi_device_modalias(dev, buf, PAGE_SIZE -1);
+	len = i2c_acpi_device_modalias(client, buf, PAGE_SIZE - 1);
 	if (len != -ENODEV)
 		return len;
 
