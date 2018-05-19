@@ -276,6 +276,7 @@ int __acpi_device_uevent_modalias(struct acpi_device *adev,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(__acpi_device_uevent_modalias);
 
 /**
  * acpi_device_uevent_modalias - uevent modalias for ACPI-enumerated devices.
@@ -291,7 +292,7 @@ int acpi_device_uevent_modalias(struct device *dev, struct kobj_uevent_env *env)
 }
 EXPORT_SYMBOL_GPL(acpi_device_uevent_modalias);
 
-static int __acpi_device_modalias(struct acpi_device *adev, char *buf, int size)
+int __acpi_device_modalias(struct acpi_device *adev, char *buf, int size)
 {
 	int len, count;
 
@@ -321,6 +322,7 @@ static int __acpi_device_modalias(struct acpi_device *adev, char *buf, int size)
 
 	return len;
 }
+EXPORT_SYMBOL_GPL(__acpi_device_modalias);
 
 /**
  * acpi_device_modalias - modalias sysfs attribute for ACPI-enumerated devices.

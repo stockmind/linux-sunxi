@@ -767,11 +767,11 @@ static bool __acpi_match_device_cls(const struct acpi_device_id *id,
 	return true;
 }
 
-static bool __acpi_match_device(struct acpi_device *device,
-				const struct acpi_device_id *acpi_ids,
-				const struct of_device_id *of_ids,
-				const struct acpi_device_id **acpi_id,
-				const struct of_device_id **of_id)
+bool __acpi_match_device(struct acpi_device *device,
+			 const struct acpi_device_id *acpi_ids,
+			 const struct of_device_id *of_ids,
+			 const struct acpi_device_id **acpi_id,
+			 const struct of_device_id **of_id)
 {
 	const struct acpi_device_id *id;
 	struct acpi_hardware_id *hwid;
@@ -808,6 +808,7 @@ out_acpi_match:
 		*acpi_id = id;
 	return true;
 }
+EXPORT_SYMBOL_GPL(__acpi_match_device);
 
 /**
  * acpi_match_device - Match a struct device against a given list of ACPI IDs

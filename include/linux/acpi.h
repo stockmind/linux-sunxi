@@ -586,12 +586,23 @@ extern int acpi_nvs_for_each_region(int (*func)(__u64, __u64, void *),
 
 const struct acpi_device_id *acpi_match_device(const struct acpi_device_id *ids,
 					       const struct device *dev);
+/* Skips the acpi_companion_match() check, normal code must not use this */
+bool __acpi_match_device(struct acpi_device *device,
+			 const struct acpi_device_id *acpi_ids,
+			 const struct of_device_id *of_ids,
+			 const struct acpi_device_id **acpi_id,
+			 const struct of_device_id **of_id);
 
 const void *acpi_device_get_match_data(const struct device *dev);
 extern bool acpi_driver_match_device(struct device *dev,
 				     const struct device_driver *drv);
 int acpi_device_uevent_modalias(struct device *, struct kobj_uevent_env *);
+/* Skips the acpi_companion_match() check, normal code must not use this */
+int __acpi_device_uevent_modalias(struct acpi_device *adev,
+				  struct kobj_uevent_env *env);
 int acpi_device_modalias(struct device *, char *, int);
+/* Skips the acpi_companion_match() check, normal code must not use this */
+int __acpi_device_modalias(struct acpi_device *adev, char *buf, int size);
 void acpi_walk_dep_device_list(acpi_handle handle);
 
 struct platform_device *acpi_create_platform_device(struct acpi_device *,
