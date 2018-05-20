@@ -312,9 +312,11 @@ static int i2c_device_probe(struct device *dev)
 		} else if (dev->of_node) {
 			irq = of_irq_get_byname(dev->of_node, "irq");
 			if (irq == -EINVAL || irq == -ENODATA)
-				irq = of_irq_get(dev->of_node, 0);
+				irq = of_irq_get(dev->of_node,
+						 client->fwnode_irq_index);
 		} else if (ACPI_COMPANION(dev)) {
-			irq = acpi_dev_gpio_irq_get(ACPI_COMPANION(dev), 0);
+			irq = acpi_dev_gpio_irq_get(ACPI_COMPANION(dev),
+						    client->fwnode_irq_index);
 		}
 		if (irq == -EPROBE_DEFER)
 			return irq;
@@ -724,6 +726,7 @@ i2c_new_device(struct i2c_adapter *adap, struct i2c_board_info const *info)
 	client->flags = info->flags;
 	client->addr = info->addr;
 
+	client->fwnode_irq_index = info->fwnode_irq_index;
 	client->irq = info->irq;
 	if (!client->irq)
 		client->irq = i2c_dev_irq_from_resources(info->resources,
