@@ -355,6 +355,7 @@ enum log_flags {
 	LOG_NEWLINE	= 2,	/* text ended with a newline */
 	LOG_PREFIX	= 4,	/* text started with a prefix */
 	LOG_CONT	= 8,	/* text is a fragment of a continuation line */
+	LOG_CHK_LEVEL	= 16,	/* check log level during flush */
 };
 
 struct printk_log {
@@ -1881,7 +1882,10 @@ int vprintk_store(int facility, int level,
 	if (dict)
 		lflags |= LOG_PREFIX|LOG_NEWLINE;
 
-	if (suppress_message_printing(level))
+	/* During early boot loglevel is not setup yet, check it later */
+	if (early_boot_irqs_disabled)
+		lflags |= LOG_CHK_LEVEL;
+	else if (suppress_message_printing(level))
 		lflags |= LOG_NOCONS;
 
 	return log_output(facility, level, lflags,
@@ -2368,7 +2372,9 @@ skip:
 			break;
 
 		msg = log_from_idx(console_idx);
-		if (msg->flags & LOG_NOCONS) {
+		if ((msg->flags & LOG_NOCONS) ||
+		    ((msg->flags & LOG_CHK_LEVEL) &&
+				suppress_message_printing(msg->level))) {
 			/*
 			 * Skip record if !ignore_loglevel, and
 			 * record has level above the console loglevel.
